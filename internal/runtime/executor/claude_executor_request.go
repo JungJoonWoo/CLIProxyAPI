@@ -1649,6 +1649,11 @@ func applyClaudeHeadersWithNativeProfile(
 	} else {
 		helps.ApplyClaudeLegacyDeviceHeaders(r, incomingHeaders, cfg, confirmedClaudeCode)
 	}
+	if !confirmedClaudeCode {
+		if version := helps.ClaudeCLIVersionSnapshot(r.Context()); version != "" {
+			r.Header.Set("User-Agent", "claude-cli/"+version+" (external, cli)")
+		}
+	}
 	var attrs map[string]string
 	if auth != nil {
 		attrs = auth.Attributes

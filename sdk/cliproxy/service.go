@@ -34,6 +34,11 @@ type Service struct {
 	// cfgMu protects concurrent access to the configuration.
 	cfgMu sync.RWMutex
 
+	claudeModelsMu        sync.RWMutex
+	claudeModelsCycleMu   sync.Mutex
+	claudeModels          map[string]claudeModelSnapshot
+	claudeDiscoveryCancel context.CancelFunc
+
 	// configUpdateMu serializes config updates across watcher + home.
 	configUpdateMu sync.Mutex
 

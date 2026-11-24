@@ -3303,7 +3303,7 @@ func resultErrorFromError(err error) *Error {
 		if resultErr.Code == "" || resultErr.Code == transientTransportErrorCode {
 			resultErr.Code = transientTransportErrorCode
 		}
-	case isConnectionLifecycleError(err):
+	case isConnectionLifecycleError(err) || isCredentialCooldownTransportError(err):
 		// Preserve lifecycle classification for MarkResult without making the error
 		// request-scoped (which would also stop credential fallback).
 		if resultErr.Code == "" || resultErr.Code == connectionLifecycleErrorCode {
@@ -3315,6 +3315,19 @@ func resultErrorFromError(err error) *Error {
 		}
 	}
 	return resultErr
+}
+
+// isCredentialCooldownTransportError identifies typed socket failures only for
+// cooldown classification. Keep Home retry decisions on the original lifecycle policy.
+func isCredentialCooldownTransportError(err error) bool {
+	if err == nil || statusCodeFromError(err) != 0 {
+		return false
+	}
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ETIMEDOUT) {
+		return true
+	}
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr != nil && opErr.Timeout()
 }
 
 // shouldSkipCredentialCooldown reports failures that must not mark auth/model cooling.

@@ -111,13 +111,24 @@ func (m *LogFormatter) Format(entry *log.Entry) ([]byte, error) {
 	}
 	levelStr := fmt.Sprintf("%-5s", level)
 
-	// Build fields string (only print fields in logFieldOrder)
+	// Build fields string using explicit field allowlists.
 	var fieldsStr string
 	if len(entry.Data) > 0 {
 		var fields []string
 		for _, k := range logFieldOrder {
 			if v, ok := entry.Data[k]; ok {
 				fields = append(fields, fmt.Sprintf("%s=%s", k, formatLogFieldValue(k, v)))
+			}
+		}
+		if entry.Message == "claude_stream_termination" {
+			for _, k := range []string{
+				"message_id", "stop_reason", "message_stop",
+				"text_blocks", "thinking_blocks", "tool_use_blocks", "other_blocks",
+				"text_bytes", "output_tokens",
+			} {
+				if v, ok := entry.Data[k]; ok {
+					fields = append(fields, fmt.Sprintf("%s=%s", k, formatLogFieldValue(k, v)))
+				}
 			}
 		}
 		if pluginID, ok := entry.Data["plugin_id"]; ok && strings.TrimSpace(fmt.Sprint(pluginID)) != "" {

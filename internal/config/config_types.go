@@ -182,6 +182,9 @@ func (c ClaudeConfig) SessionDatePinRetention() time.Duration {
 // to the final Anthropic-Beta set; InjectDiagnostics and ClientRequestID tune the
 // first-party Claude Code CLI request shape.
 type ClaudeHeaderDefaults struct {
+	// CLIPath optionally tracks an installed CLI version for reconstructed requests.
+	// It must be absolute; UserAgent takes precedence. It does not change native detection.
+	CLIPath                string   `yaml:"cli-path,omitempty" json:"cli-path,omitempty"`
 	UserAgent              string   `yaml:"user-agent" json:"user-agent"`
 	PackageVersion         string   `yaml:"package-version" json:"package-version"`
 	RuntimeVersion         string   `yaml:"runtime-version" json:"runtime-version"`

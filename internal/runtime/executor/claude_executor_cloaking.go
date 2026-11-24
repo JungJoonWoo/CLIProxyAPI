@@ -517,7 +517,7 @@ func claudeCCHFallbackBillingHeader(ctx context.Context, cfg *config.Config, pay
 	isSubagent := helps.IsClaudeSubagentRequest(incomingHeaders, payload)
 	return generateBillingHeader(
 		true,
-		helps.DefaultClaudeVersion(cfg),
+		helps.ClaudeVersionFromContext(ctx, cfg),
 		claudeBillingFingerprintMessageText(payload),
 		entrypoint,
 		getWorkloadFromContext(ctx),
@@ -2708,7 +2708,7 @@ func applyCloakingInternalDoc(
 		}
 	}
 
-	billingVersion := helps.DefaultClaudeVersion(cfg)
+	billingVersion := helps.ClaudeVersionFromContext(ctx, cfg)
 	workload := getWorkloadFromContext(ctx)
 
 	isProbeOrHelper := isClaudeProbeOrHelperRequestDoc(doc)

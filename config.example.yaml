@@ -597,7 +597,11 @@ upstream:
     # enabled, OS/arch are pinned to the values below and cached profiles remain constrained to
     # the same exact software baseline rather than learning newer client versions (unless the
     # credential resolves to cloak_mode: never, which preserves the confirmed caller's headers).
+    # Optional cli-path runs only this absolute executable with --version (no PATH lookup).
+    # Without user-agent, reconstructed CLI requests track installed release versions, including
+    # upgrades and rollbacks; failures use the baseline below and retry after 5 seconds.
     # header-defaults:
+    #   cli-path: "/opt/homebrew/bin/claude" # optional; omit user-agent to enable
     #   user-agent: "claude-cli/2.1.321 (external, cli)"
     #   package-version: "0.128.0"
     #   runtime-version: "v26.12.1"

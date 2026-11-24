@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -46,6 +48,8 @@ func (a *ClaudeAuthenticator) Login(ctx context.Context, cfg *config.Config, opt
 		opts = &LoginOptions{}
 	}
 
+	helper := os.Getenv("CLIPROXY_CLAUDE_LOGIN_HELPER") == "1"
+	helperEvents := json.NewEncoder(os.Stdout)
 	callbackPort := a.CallbackPort
 	if opts.CallbackPort > 0 {
 		callbackPort = opts.CallbackPort
@@ -84,7 +88,13 @@ func (a *ClaudeAuthenticator) Login(ctx context.Context, cfg *config.Config, opt
 	}
 	state = returnedState
 
-	if !opts.NoBrowser {
+	if helper {
+		if errEncode := helperEvents.Encode(map[string]any{
+			"type": "claude_oauth", "event": "auth_url", "url": authURL, "expires_in": 300,
+		}); errEncode != nil {
+			return nil, fmt.Errorf("claude helper event failed: %w", errEncode)
+		}
+	} else if !opts.NoBrowser {
 		fmt.Println("Opening browser for Claude authentication")
 		if !browser.IsAvailable() {
 			log.Warn("No browser available; please open the URL manually")
@@ -100,7 +110,9 @@ func (a *ClaudeAuthenticator) Login(ctx context.Context, cfg *config.Config, opt
 		fmt.Printf("Visit the following URL to continue authentication:\n%s\n", authURL)
 	}
 
-	fmt.Println("Waiting for Claude authentication callback...")
+	if !helper {
+		fmt.Println("Waiting for Claude authentication callback...")
+	}
 
 	callbackCh := make(chan *claude.OAuthResult, 1)
 	callbackErrCh := make(chan error, 1)
@@ -118,7 +130,7 @@ func (a *ClaudeAuthenticator) Login(ctx context.Context, cfg *config.Config, opt
 	var result *claude.OAuthResult
 	var manualPromptTimer *time.Timer
 	var manualPromptC <-chan time.Time
-	if opts.Prompt != nil {
+	if !helper && opts.Prompt != nil {
 		manualPromptTimer = time.NewTimer(15 * time.Second)
 		manualPromptC = manualPromptTimer.C
 		defer manualPromptTimer.Stop()
@@ -130,6 +142,8 @@ func (a *ClaudeAuthenticator) Login(ctx context.Context, cfg *config.Config, opt
 waitForCallback:
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case result = <-callbackCh:
 			break waitForCallback
 		case err = <-callbackErrCh:
@@ -176,17 +190,30 @@ waitForCallback:
 		}
 	}
 
+	// Invalidate the advertised URL before validating or exchanging the callback.
+	if helper {
+		if errEncode := helperEvents.Encode(map[string]string{
+			"type": "claude_oauth", "event": "callback_received",
+		}); errEncode != nil {
+			return nil, fmt.Errorf("claude helper event failed: %w", errEncode)
+		}
+	}
+
 	if result.Error != "" {
 		return nil, claude.NewOAuthError(result.Error, manualDescription, http.StatusBadRequest)
 	}
 
 	if result.State != state {
-		log.Errorf("State mismatch: expected %s, got %s", state, result.State)
+		if !helper {
+			log.Errorf("State mismatch: expected %s, got %s", state, result.State)
+		}
 		return nil, claude.NewAuthenticationError(claude.ErrInvalidState, fmt.Errorf("state mismatch"))
 	}
 
 	log.Debug("Claude authorization code received; exchanging for tokens")
-	log.Debugf("Code: %s, State: %s", result.Code[:min(20, len(result.Code))], state)
+	if !helper {
+		log.Debugf("Code: %s, State: %s", result.Code[:min(20, len(result.Code))], state)
+	}
 
 	authBundle, err := authSvc.ExchangeCodeForTokens(ctx, result.Code, state, pkceCodes)
 	if err != nil {
@@ -217,9 +244,11 @@ waitForCallback:
 		metadata[claude.ClaudeDeviceIDsMetadataKey] = append([]string(nil), tokenStorage.DeviceIDs...)
 	}
 
-	fmt.Println("Claude authentication successful")
-	if authBundle.APIKey != "" {
-		fmt.Println("Claude API key obtained and stored")
+	if !helper {
+		fmt.Println("Claude authentication successful")
+		if authBundle.APIKey != "" {
+			fmt.Println("Claude API key obtained and stored")
+		}
 	}
 
 	return &coreauth.Auth{

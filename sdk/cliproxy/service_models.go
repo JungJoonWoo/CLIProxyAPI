@@ -142,7 +142,7 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
 			models = registry.GetAntigravityModels()
 		}
 	case "claude":
-		models = registry.GetClaudeModels()
+		models = s.mergeClaudeDiscoveredModels(a, cfg, registry.GetClaudeModels())
 		if entry := resolveConfigClaudeKeyForConfig(cfg, a); entry != nil {
 			if len(entry.Models) > 0 {
 				models = buildClaudeConfigModels(entry)

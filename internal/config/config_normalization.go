@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,6 +78,10 @@ func (cfg *Config) SanitizeClaudeHeaderDefaults() {
 		mode = ""
 	}
 	cfg.ClaudeHeaderDefaults.ClientRequestID = mode
+	cfg.ClaudeHeaderDefaults.CLIPath = strings.TrimSpace(cfg.ClaudeHeaderDefaults.CLIPath)
+	if !filepath.IsAbs(cfg.ClaudeHeaderDefaults.CLIPath) {
+		cfg.ClaudeHeaderDefaults.CLIPath = ""
+	}
 	cfg.ClaudeHeaderDefaults.UserAgent = strings.TrimSpace(cfg.ClaudeHeaderDefaults.UserAgent)
 	cfg.ClaudeHeaderDefaults.PackageVersion = strings.TrimSpace(cfg.ClaudeHeaderDefaults.PackageVersion)
 	cfg.ClaudeHeaderDefaults.RuntimeVersion = strings.TrimSpace(cfg.ClaudeHeaderDefaults.RuntimeVersion)

@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -77,33 +79,42 @@ func (s *OAuthServer) Start() error {
 		return fmt.Errorf("server is already running")
 	}
 
-	// Check if port is available
-	if !s.isPortAvailable() {
-		return fmt.Errorf("port %d is already in use", s.port)
-	}
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", s.handleCallback)
 	mux.HandleFunc("/success", s.handleSuccess)
 
-	s.server = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.port),
+	host := ""
+	if os.Getenv("CLIPROXY_CLAUDE_LOGIN_HELPER") == "1" {
+		host = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(host, fmt.Sprint(s.port))
+	// Bind synchronously so startup cannot race another listener.
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		if errors.Is(err, syscall.EADDRINUSE) {
+			return fmt.Errorf("port %d is already in use: %w", s.port, err)
+		}
+		return fmt.Errorf("oauth callback listen failed: %w", err)
+	}
+	server := &http.Server{
+		Addr:         addr,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
+	s.server = server
 	s.running = true
 
 	// Start server in goroutine
 	go func() {
-		if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.errorChan <- fmt.Errorf("server failed to start: %w", err)
+		if errServe := server.Serve(listener); errServe != nil && !errors.Is(errServe, http.ErrServerClosed) {
+			select {
+			case s.errorChan <- fmt.Errorf("server failed to serve: %w", errServe):
+			default:
+			}
 		}
 	}()
-
-	// Give server a moment to start
-	time.Sleep(100 * time.Millisecond)
 
 	return nil
 }
@@ -290,23 +301,6 @@ func (s *OAuthServer) sendResult(result *OAuthResult) {
 	default:
 		log.Warn("OAuth result channel is full, result dropped")
 	}
-}
-
-// isPortAvailable checks if the specified port is available.
-// It attempts to listen on the port to determine availability.
-//
-// Returns:
-//   - bool: True if the port is available, false otherwise
-func (s *OAuthServer) isPortAvailable() bool {
-	addr := fmt.Sprintf(":%d", s.port)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return false
-	}
-	defer func() {
-		_ = listener.Close()
-	}()
-	return true
 }
 
 // IsRunning returns whether the server is currently running.

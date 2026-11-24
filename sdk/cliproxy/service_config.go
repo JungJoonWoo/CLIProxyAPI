@@ -174,6 +174,13 @@ func (s *Service) commitConfigUpdate(newCfg *config.Config) configCommit {
 	helps.AdvanceProxyPoolGeneration(s.proxyPoolPublisher, newCfg)
 	s.cfgMu.Lock()
 	s.cfg = newCfg
+	if newCfg.Home.Enabled {
+		s.claudeModelsMu.Lock()
+		if s.claudeDiscoveryCancel != nil {
+			s.claudeDiscoveryCancel()
+		}
+		s.claudeModelsMu.Unlock()
+	}
 	s.cfgMu.Unlock()
 	s.cancelStaleAntigravityProbes("")
 	s.configSequence++

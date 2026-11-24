@@ -69,6 +69,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
 	wirePolicy, wireSettings := resolveClaudeWirePolicy(e.cfg, auth, apiKey, claudeCodeDetection.Confirmed)
 	confirmedClaudeCode := isEffectiveConfirmedClaudeCode(claudeCodeDetection, wirePolicy)
 	ctx = e.pinResponsesSystemItemPlacement(ctx, auth, from, upstreamModel, wirePolicy, wireSettings)
+	if !confirmedClaudeCode {
+		versionPolicy, _ := resolveClaudeWirePolicy(e.cfg, auth, apiKey, false)
+		if fp.ProfileClaudeCodeCLI || versionPolicy.Cloak {
+			ctx = helps.WithClaudeCLIVersionSnapshot(ctx, e.cfg)
+		}
+	}
 	claudeSessionID := ""
 	if fp.ProfileClaudeCodeCLI {
 		claudeSessionID = helps.ClaudeAgentSessionUUIDForRequest(incomingHeaders, originalPayload, req.Payload, confirmedClaudeCode, opts.Metadata, req.Metadata)

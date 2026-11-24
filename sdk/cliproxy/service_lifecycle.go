@@ -238,6 +238,15 @@ func (s *Service) Run(ctx context.Context) error {
 	if !homeEnabled {
 		go s.runAntigravityModelRefresh(ctx)
 	}
+	discoveryDone := make(chan struct{})
+	go func() {
+		defer close(discoveryDone)
+		s.runClaudeModelDiscovery(ctx)
+	}()
+	defer func() {
+		runCancel()
+		<-discoveryDone
+	}()
 
 	select {
 	case <-ctx.Done():
